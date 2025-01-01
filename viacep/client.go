@@ -2,12 +2,36 @@ package viacep
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 )
 
-const url = "https://viacep.com.br"
+const urlBase = "https://viacep.com.br"
+
+type Service interface {
+	// Cep retrieves the address information for a given CEP (postal code).
+	//
+	// Parameters:
+	//   - ctx: The context to manage the request lifecycle, such as timeouts or cancellations.
+	//   - cep: The postal code (CEP) for which the address information will be retrieved.
+	//
+	// Returns:
+	//   - *Address: A pointer to the Address object with the address data.
+	//   - error: If an error occurs during the request, it will be returned. Otherwise, nil will be returned.
+	Cep(ctx context.Context, cep string) (*Address, error)
+
+	// Addresses retrieves a list of addresses based on the provided parameters: state (uf), city (cidade), and street (logradouro).
+	//
+	// Parameters:
+	//   - ctx: The context to manage the request lifecycle, such as timeouts or cancellations.
+	//   - uf: The federative unit (state) for which the address search will be conducted.
+	//   - cidade: The name of the city for which the address search will be conducted.
+	//   - logradouro: The name of the street or address for which the address search will be conducted.
+	//
+	// Returns:
+	//   - []Address: A list of addresses found.
+	//   - error: If an error occurs during the request, it will be returned. Otherwise, nil will be returned.
+	Addresses(ctx context.Context, uf string, cidade string, logradouro string) ([]Address, error)
+}
 
 type Address struct {
 	Cep         string `json:"cep"`
@@ -26,10 +50,14 @@ type Address struct {
 }
 
 type ViaCep struct {
+	httpClient httpClient
 }
 
 func New(opts ...func(*ViaCep)) *ViaCep {
-	v := &ViaCep{}
+	v := &ViaCep{
+		httpClient: newRestyHttpClient(),
+	}
+
 	for _, o := range opts {
 		o(v)
 	}
@@ -38,25 +66,9 @@ func New(opts ...func(*ViaCep)) *ViaCep {
 }
 
 func (v *ViaCep) Cep(ctx context.Context, cep string) (*Address, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/ws/%s/json/", url, cep), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	c := http.DefaultClient
-	resp, err := c.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, fmt.Errorf("viaCep API returned invalid status code: %d", resp.StatusCode)
-	}
-
 	var address Address
-	if err = json.NewDecoder(resp.Body).Decode(&address); err != nil {
+	url := fmt.Sprintf("%s/ws/%s/json/", urlBase, cep)
+	if err := v.httpClient.get(ctx, url, &address); err != nil {
 		return nil, err
 	}
 
@@ -64,25 +76,9 @@ func (v *ViaCep) Cep(ctx context.Context, cep string) (*Address, error) {
 }
 
 func (v *ViaCep) Addresses(ctx context.Context, uf string, cidade string, logradouro string) ([]Address, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/ws/%s/%s/%s/json/", url, uf, cidade, logradouro), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	c := http.DefaultClient
-	resp, err := c.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, fmt.Errorf("viaCep API returned invalid status code: %d", resp.StatusCode)
-	}
-
 	var addresses []Address
-	if err = json.NewDecoder(resp.Body).Decode(&addresses); err != nil {
+	url := fmt.Sprintf("%s/ws/%s/%s/%s/json/", urlBase, uf, cidade, logradouro)
+	if err := v.httpClient.get(ctx, url, &addresses); err != nil {
 		return nil, err
 	}
 
