@@ -2,6 +2,8 @@ package viacep
 
 import (
 	"context"
+	"crypto/md5"
+	"fmt"
 	"testing"
 	"time"
 
@@ -140,5 +142,31 @@ func TestViaCep_MemoryCache_Delete(t *testing.T) {
 		var dest dummy
 		found := cache.Get(context.Background(), "user:1", &dest)
 		assert.False(t, found)
+	})
+}
+
+func TestViaCep_MemoryCache_cacheKey(t *testing.T) {
+	t.Run("multiple values", func(t *testing.T) {
+		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("part1,part2,part3")))
+		expected := fmt.Sprintf("viacep:%s", expectedHash)
+
+		result := cacheKey("part1", "part2", "part3")
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("single value", func(t *testing.T) {
+		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("single")))
+		expected := fmt.Sprintf("viacep:%s", expectedHash)
+
+		result := cacheKey("single")
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("")))
+		expected := fmt.Sprintf("viacep:%s", expectedHash)
+
+		result := cacheKey()
+		assert.Equal(t, expected, result)
 	})
 }

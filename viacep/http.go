@@ -2,11 +2,9 @@ package viacep
 
 import (
 	"context"
-	"crypto/md5"
 	"fmt"
 	"net/http"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -38,7 +36,7 @@ func NewHttpClient(opts ...func(*HttpClient)) *HttpClient {
 	c := &HttpClient{
 		httpClient: restyHttpClient,
 		cache:      newMemoryCache(),
-		cacheTTL:   defaultCacheTTL,
+		cacheTTL:   cacheTTL,
 	}
 
 	for _, o := range opts {
@@ -53,7 +51,7 @@ func (r *HttpClient) Get(ctx context.Context, url string, dest any) error {
 		return fmt.Errorf("expected a pointer for 'dest', but got %s", reflect.TypeOf(dest))
 	}
 
-	if found := r.cache.Get(ctx, r.cacheKey(url), &dest); found {
+	if found := r.cache.Get(ctx, cacheKey(url), &dest); found {
 		return nil
 	}
 
@@ -67,10 +65,5 @@ func (r *HttpClient) Get(ctx context.Context, url string, dest any) error {
 		return fmt.Errorf("API request to %s returned status code %d; expected %d (OK)", resp.Request.URL, resp.StatusCode(), http.StatusOK)
 	}
 
-	return r.cache.Set(ctx, r.cacheKey(url), dest, r.cacheTTL)
-}
-
-func (r *HttpClient) cacheKey(value ...string) string {
-	hash := fmt.Sprintf("%x", md5.Sum([]byte(strings.Join(value, ", "))))
-	return fmt.Sprintf("viacep:%s", hash)
+	return r.cache.Set(ctx, cacheKey(url), dest, r.cacheTTL)
 }

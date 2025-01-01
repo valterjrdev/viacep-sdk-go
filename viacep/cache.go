@@ -3,13 +3,16 @@ package viacep
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/gob"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
 
-const defaultCacheTTL = 3600 * time.Second
+const cacheTTL = 3600 * time.Second
+const cachePrefix = "viacep:"
 
 type Cache interface {
 	// Get retrieves an item from the cache by its key.
@@ -126,4 +129,8 @@ func (c *memoryCache) Delete(_ context.Context, key string) error {
 
 	delete(c.data, key)
 	return nil
+}
+
+func cacheKey(value ...string) string {
+	return fmt.Sprintf("%s%x", cachePrefix, md5.Sum([]byte(strings.Join(value, ","))))
 }
