@@ -113,7 +113,7 @@ func (c *memoryCache) Set(_ context.Context, key string, value any, ttl time.Dur
 	if ttl > 0 {
 		go func() {
 			time.Sleep(ttl)
-			c.Delete(context.TODO(), key)
+			_ = c.Delete(context.TODO(), key)
 		}()
 	}
 
