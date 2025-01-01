@@ -2,15 +2,17 @@ package viacep
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
 )
 
-type httpClient interface {
+type Http interface {
 	// get sends an HTTP GET request to the specified URL and stores the response.
 	//
 	// Parameters:
@@ -20,28 +22,39 @@ type httpClient interface {
 	//
 	// Returns:
 	//   - error: If an error occurs during the request, it will be returned. Otherwise, nil is returned.
-	get(ctx context.Context, url string, dest any) error
+	Get(ctx context.Context, url string, dest any) error
 }
 
-type restyHttpClient struct {
+type HttpClient struct {
 	httpClient *resty.Client
+	cache      Cache
+	cacheTTL   time.Duration
 }
 
-func newRestyHttpClient() *restyHttpClient {
-	httpClient := resty.New()
-	httpClient.
-		SetRetryCount(3).
-		SetRetryWaitTime(500 * time.Millisecond).
-		SetRetryAfter(func(client *resty.Client, resp *resty.Response) (time.Duration, error) {
-			return 0, fmt.Errorf("API call limit exceeded: you have reached the maximum number of allowed attempts(%d)", client.RetryCount)
-		})
+func NewHttpClient(opts ...func(*HttpClient)) *HttpClient {
+	restyHttpClient := resty.New()
+	restyHttpClient.SetRetryCount(3).SetRetryWaitTime(500 * time.Millisecond)
 
-	return &restyHttpClient{httpClient: httpClient}
+	c := &HttpClient{
+		httpClient: restyHttpClient,
+		cache:      newMemoryCache(),
+		cacheTTL:   defaultCacheTTL,
+	}
+
+	for _, o := range opts {
+		o(c)
+	}
+
+	return c
 }
 
-func (r *restyHttpClient) get(ctx context.Context, url string, dest any) error {
+func (r *HttpClient) Get(ctx context.Context, url string, dest any) error {
 	if reflect.ValueOf(dest).Kind() != reflect.Ptr {
 		return fmt.Errorf("expected a pointer for 'dest', but got %s", reflect.TypeOf(dest))
+	}
+
+	if found := r.cache.Get(ctx, r.cacheKey(url), &dest); found {
+		return nil
 	}
 
 	req := r.httpClient.R()
@@ -54,5 +67,10 @@ func (r *restyHttpClient) get(ctx context.Context, url string, dest any) error {
 		return fmt.Errorf("API request to %s returned status code %d; expected %d (OK)", resp.Request.URL, resp.StatusCode(), http.StatusOK)
 	}
 
-	return nil
+	return r.cache.Set(ctx, r.cacheKey(url), dest, r.cacheTTL)
+}
+
+func (r *HttpClient) cacheKey(value ...string) string {
+	hash := fmt.Sprintf("%x", md5.Sum([]byte(strings.Join(value, ", "))))
+	return fmt.Sprintf("viacep:%s", hash)
 }

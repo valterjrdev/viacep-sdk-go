@@ -9,7 +9,7 @@ import (
 
 func TestViaCep_Client_Cep(t *testing.T) {
 	t.Run("integration", func(t *testing.T) {
-		c := New()
+		c := New(NewHttpClient())
 		address, err := c.Cep(context.Background(), "01001000")
 		assert.NoError(t, err)
 
@@ -35,7 +35,7 @@ func TestViaCep_Client_Cep(t *testing.T) {
 
 func TestViaCep_Client_Addresses(t *testing.T) {
 	t.Run("integration", func(t *testing.T) {
-		c := New()
+		c := New(NewHttpClient())
 		addresses, err := c.Addresses(context.Background(), "RS", "Porto Alegre", "Domingos+José")
 		assert.NoError(t, err)
 

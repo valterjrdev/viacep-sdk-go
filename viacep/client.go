@@ -50,25 +50,17 @@ type Address struct {
 }
 
 type ViaCep struct {
-	httpClient httpClient
+	httpClient Http
 }
 
-func New(opts ...func(*ViaCep)) *ViaCep {
-	v := &ViaCep{
-		httpClient: newRestyHttpClient(),
-	}
-
-	for _, o := range opts {
-		o(v)
-	}
-
-	return v
+func New(httpClient Http) *ViaCep {
+	return &ViaCep{httpClient: httpClient}
 }
 
 func (v *ViaCep) Cep(ctx context.Context, cep string) (*Address, error) {
 	var address Address
 	url := fmt.Sprintf("%s/ws/%s/json/", urlBase, cep)
-	if err := v.httpClient.get(ctx, url, &address); err != nil {
+	if err := v.httpClient.Get(ctx, url, &address); err != nil {
 		return nil, err
 	}
 
@@ -78,7 +70,7 @@ func (v *ViaCep) Cep(ctx context.Context, cep string) (*Address, error) {
 func (v *ViaCep) Addresses(ctx context.Context, uf string, cidade string, logradouro string) ([]Address, error) {
 	var addresses []Address
 	url := fmt.Sprintf("%s/ws/%s/%s/%s/json/", urlBase, uf, cidade, logradouro)
-	if err := v.httpClient.get(ctx, url, &addresses); err != nil {
+	if err := v.httpClient.Get(ctx, url, &addresses); err != nil {
 		return nil, err
 	}
 
