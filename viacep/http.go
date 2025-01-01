@@ -25,34 +25,20 @@ type Http interface {
 
 type HttpClient struct {
 	httpClient *resty.Client
-	cache      Cache
-	cacheTTL   time.Duration
 }
 
-func NewHttpClient(opts ...func(*HttpClient)) *HttpClient {
+func NewHttpClient() *HttpClient {
 	restyHttpClient := resty.New()
 	restyHttpClient.SetRetryCount(3).SetRetryWaitTime(500 * time.Millisecond)
 
-	c := &HttpClient{
+	return &HttpClient{
 		httpClient: restyHttpClient,
-		cache:      newMemoryCache(),
-		cacheTTL:   cacheTTL,
 	}
-
-	for _, o := range opts {
-		o(c)
-	}
-
-	return c
 }
 
 func (r *HttpClient) Get(ctx context.Context, url string, dest any) error {
 	if reflect.ValueOf(dest).Kind() != reflect.Ptr {
 		return fmt.Errorf("expected a pointer for 'dest', but got %s", reflect.TypeOf(dest))
-	}
-
-	if found := r.cache.Get(ctx, cacheKey(url), &dest); found {
-		return nil
 	}
 
 	req := r.httpClient.R()
@@ -65,5 +51,5 @@ func (r *HttpClient) Get(ctx context.Context, url string, dest any) error {
 		return fmt.Errorf("API request to %s returned status code %d; expected %d (OK)", resp.Request.URL, resp.StatusCode(), http.StatusOK)
 	}
 
-	return r.cache.Set(ctx, cacheKey(url), dest, r.cacheTTL)
+	return nil
 }

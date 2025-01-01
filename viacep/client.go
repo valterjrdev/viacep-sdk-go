@@ -51,28 +51,46 @@ type Address struct {
 
 type ViaCep struct {
 	httpClient Http
+	cache      Cache
 }
 
 func New(httpClient Http) *ViaCep {
-	return &ViaCep{httpClient: httpClient}
+	return &ViaCep{
+		httpClient: httpClient,
+		cache:      newMemoryCache(),
+	}
 }
 
 func (v *ViaCep) Cep(ctx context.Context, cep string) (*Address, error) {
+	key := cacheKey(cep)
+
 	var address Address
+	if found := v.cache.Get(ctx, key, &address); found {
+		return &address, nil
+	}
+
 	url := fmt.Sprintf("%s/ws/%s/json/", urlBase, cep)
 	if err := v.httpClient.Get(ctx, url, &address); err != nil {
 		return nil, err
 	}
 
+	_ = v.cache.Set(ctx, key, address, cacheTTL)
 	return &address, nil
 }
 
 func (v *ViaCep) Addresses(ctx context.Context, uf string, cidade string, logradouro string) ([]Address, error) {
+	key := cacheKey(uf, cidade, logradouro)
+
 	var addresses []Address
+	if found := v.cache.Get(ctx, key, &addresses); found {
+		return addresses, nil
+	}
+
 	url := fmt.Sprintf("%s/ws/%s/%s/%s/json/", urlBase, uf, cidade, logradouro)
 	if err := v.httpClient.Get(ctx, url, &addresses); err != nil {
 		return nil, err
 	}
 
+	_ = v.cache.Set(ctx, key, addresses, cacheTTL)
 	return addresses, nil
 }
