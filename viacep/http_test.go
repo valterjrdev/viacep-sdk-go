@@ -23,7 +23,7 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		client := NewHttpClient(1)
+		client := NewHTTPClient(1)
 
 		dest := map[string]string{}
 		err := client.Get(context.Background(), srv.URL, &dest)
@@ -32,7 +32,7 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 	})
 
 	t.Run("invalid dest type", func(t *testing.T) {
-		client := NewHttpClient(1)
+		client := NewHTTPClient(1)
 
 		invalidDest := "string_instead_of_pointer"
 		err := client.Get(context.Background(), "http://", invalidDest)
@@ -40,13 +40,13 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 	})
 
 	t.Run("non-ok status code", func(t *testing.T) {
-		errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 
 		defer errorServer.Close()
 
-		client := NewHttpClient(1)
+		client := NewHTTPClient(1)
 
 		dest := map[string]string{}
 		err := client.Get(context.Background(), errorServer.URL, &dest)
@@ -54,7 +54,7 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 	})
 
 	t.Run("HTTP request error", func(t *testing.T) {
-		client := NewHttpClient(0)
+		client := NewHTTPClient(0)
 		url := "httpdd://invalid-url"
 		dest := map[string]string{}
 
@@ -63,18 +63,18 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 	})
 
 	t.Run("timeout", func(t *testing.T) {
-		errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		errorServer := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			time.Sleep(10 * time.Millisecond)
 		}))
 		defer errorServer.Close()
 
-		client := NewHttpClient(0)
+		client := NewHTTPClient(0)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 		defer cancel()
 
 		dest := map[string]string{}
 		err := client.Get(ctx, errorServer.URL, &dest)
-		assert.EqualError(t, err, fmt.Sprintf("failed to send GET request to %s: Get \"%s\": context deadline exceeded", errorServer.URL, errorServer.URL))
+		assert.EqualError(t, err, fmt.Sprintf("failed to send GET request to %s: Get %q: context deadline exceeded", errorServer.URL, errorServer.URL))
 	})
 }

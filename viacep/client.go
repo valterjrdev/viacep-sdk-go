@@ -30,7 +30,7 @@ type Service interface {
 	// Returns:
 	//   - []Address: A list of addresses found.
 	//   - error: If an error occurs during the request, it will be returned. Otherwise, nil will be returned.
-	Addresses(ctx context.Context, uf string, cidade string, logradouro string) ([]Address, error)
+	Addresses(ctx context.Context, uf, cidade, logradouro string) ([]Address, error)
 }
 
 type Address struct {
@@ -50,11 +50,11 @@ type Address struct {
 }
 
 type ViaCep struct {
-	httpClient Http
+	httpClient HTTP
 	cache      Cache
 }
 
-func New(httpClient Http) *ViaCep {
+func New(httpClient HTTP) *ViaCep {
 	return &ViaCep{
 		httpClient: httpClient,
 		cache:      newMemoryCache(),
@@ -78,7 +78,7 @@ func (v *ViaCep) Cep(ctx context.Context, cep string) (*Address, error) {
 	return &address, nil
 }
 
-func (v *ViaCep) Addresses(ctx context.Context, uf string, cidade string, logradouro string) ([]Address, error) {
+func (v *ViaCep) Addresses(ctx context.Context, uf, cidade, logradouro string) ([]Address, error) {
 	key := cacheKey(uf, cidade, logradouro)
 
 	var addresses []Address

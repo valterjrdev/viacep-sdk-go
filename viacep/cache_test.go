@@ -3,10 +3,8 @@ package viacep
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -16,25 +14,19 @@ import (
 
 func TestViaCep_MemoryCache_cacheKey(t *testing.T) {
 	t.Run("multiple values", func(t *testing.T) {
-		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("part1,part2,part3")))
-		expected := fmt.Sprintf("viacep:%s", expectedHash)
-
+		expected := "viacep:93046c72a31da34f3f01241343d00bddc8edc3b386ebaef62f3b5083ec6257d9"
 		result := cacheKey("part1", "part2", "part3")
 		assert.Equal(t, expected, result)
 	})
 
 	t.Run("single value", func(t *testing.T) {
-		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("single")))
-		expected := fmt.Sprintf("viacep:%s", expectedHash)
-
+		expected := "viacep:947f187506f7629c81c81879a2cb2256455038e4ac770091d897fa0a8b945e3b"
 		result := cacheKey("single")
 		assert.Equal(t, expected, result)
 	})
 
 	t.Run("empty input", func(t *testing.T) {
-		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("")))
-		expected := fmt.Sprintf("viacep:%s", expectedHash)
-
+		expected := "viacep:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 		result := cacheKey()
 		assert.Equal(t, expected, result)
 	})

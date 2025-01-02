@@ -3,7 +3,7 @@ package viacep
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/gob"
 	"fmt"
 	"strings"
@@ -84,7 +84,9 @@ type RedisCache struct {
 }
 
 func cacheKey(value ...string) string {
-	return fmt.Sprintf("%s%x", cachePrefix, md5.Sum([]byte(strings.Join(value, ","))))
+	hash := sha256.New()
+	hash.Write([]byte(strings.Join(value, ",")))
+	return fmt.Sprintf("%s%x", cachePrefix, hash.Sum(nil))
 }
 
 func newMemoryCache() *memoryCache {
@@ -108,7 +110,7 @@ func (c *memoryCache) Get(_ context.Context, key string, dest any) bool {
 		return false
 	}
 
-	buffer := bytes.NewBuffer([]byte(serialized))
+	buffer := bytes.NewBuffer(serialized)
 	decoder := gob.NewDecoder(buffer)
 	if err := decoder.Decode(dest); err != nil {
 		return false

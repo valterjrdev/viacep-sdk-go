@@ -14,7 +14,7 @@ func TestViaCep_Client_Cep(t *testing.T) {
 			t.Skip()
 		}
 
-		c := New(NewHttpClient(1))
+		c := New(NewHTTPClient(1))
 		address, err := c.Cep(context.Background(), "01001000")
 		assert.NoError(t, err)
 
@@ -45,7 +45,7 @@ func TestViaCep_Client_Addresses(t *testing.T) {
 			t.Skip()
 		}
 
-		c := New(NewHttpClient(1))
+		c := New(NewHTTPClient(1))
 		addresses, err := c.Addresses(context.Background(), "RS", "Porto Alegre", "Domingos+José")
 		assert.NoError(t, err)
 
