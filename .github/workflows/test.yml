@@ -1,0 +1,62 @@
+name: Go Tests with Minimum Coverage Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      min_coverage:
+        description: 'Minimum Coverage Threshold'
+        required: true
+        default: '95'
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go: [1.23]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.mod') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: |
+          go mod tidy
+
+      - name: Run tests and generate coverage report
+        run: |
+          make coverage
+
+      - name: Check coverage
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          MIN_COVERAGE=80  # Set your desired minimum coverage percentage here
+
+          echo "Code coverage: $COVERAGE%"
+
+          MIN_COVERAGE=${{ github.event.inputs.min_coverage }}
+
+          # Check if coverage is below the minimum threshold
+          if [ "$COVERAGE" -lt "$MIN_COVERAGE" ]; then
+            echo "Coverage is below the required threshold of $MIN_COVERAGE%. Failing the build."
+            exit 1
+          else
+            echo "Coverage is above the minimum threshold of $MIN_COVERAGE%. Continuing."
+          fi

@@ -10,6 +10,8 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+var headersDefault = map[string]string{"Content-Type": "application/json", "Accept": "application/json"}
+
 type Http interface {
 	// get sends an HTTP GET request to the specified URL and stores the response.
 	//
@@ -27,9 +29,9 @@ type HttpClient struct {
 	httpClient *resty.Client
 }
 
-func NewHttpClient() *HttpClient {
+func NewHttpClient(maxRetry int) *HttpClient {
 	restyHttpClient := resty.New()
-	restyHttpClient.SetRetryCount(3).SetRetryWaitTime(500 * time.Millisecond)
+	restyHttpClient.SetRetryCount(maxRetry).SetRetryWaitTime(500 * time.Millisecond)
 
 	return &HttpClient{
 		httpClient: restyHttpClient,
@@ -41,8 +43,8 @@ func (r *HttpClient) Get(ctx context.Context, url string, dest any) error {
 		return fmt.Errorf("expected a pointer for 'dest', but got %s", reflect.TypeOf(dest))
 	}
 
-	req := r.httpClient.R().SetContext(ctx).SetHeaders(map[string]string{"Content-Type": "application/json", "Accept": "application/json"})
-	resp, err := req.SetResult(dest).Get(url)
+	req := r.httpClient.R().SetContext(ctx)
+	resp, err := req.SetHeaders(headersDefault).SetResult(dest).Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to send GET request to %s: %w", url, err)
 	}

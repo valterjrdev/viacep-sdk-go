@@ -23,7 +23,7 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		client := NewHttpClient()
+		client := NewHttpClient(1)
 
 		dest := map[string]string{}
 		err := client.Get(context.Background(), srv.URL, &dest)
@@ -32,7 +32,7 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 	})
 
 	t.Run("invalid dest type", func(t *testing.T) {
-		client := NewHttpClient()
+		client := NewHttpClient(1)
 
 		invalidDest := "string_instead_of_pointer"
 		err := client.Get(context.Background(), "http://", invalidDest)
@@ -46,7 +46,7 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 
 		defer errorServer.Close()
 
-		client := NewHttpClient()
+		client := NewHttpClient(1)
 
 		dest := map[string]string{}
 		err := client.Get(context.Background(), errorServer.URL, &dest)
@@ -54,7 +54,7 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 	})
 
 	t.Run("HTTP request error", func(t *testing.T) {
-		client := NewHttpClient()
+		client := NewHttpClient(0)
 		url := "httpdd://invalid-url"
 		dest := map[string]string{}
 
@@ -68,7 +68,7 @@ func TestViaCep_HttpClient_Get(t *testing.T) {
 		}))
 		defer errorServer.Close()
 
-		client := NewHttpClient()
+		client := NewHttpClient(0)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 		defer cancel()
