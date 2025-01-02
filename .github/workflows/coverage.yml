@@ -1,16 +1,10 @@
-name: Coverage check
+name: coverage check
 
 on:
   push:
     branches:
       - main
   pull_request:
-  workflow_dispatch:
-    inputs:
-      min_coverage:
-        description: 'Minimum Coverage Threshold'
-        required: true
-        default: '95'
 
 jobs:
   test:
@@ -44,18 +38,7 @@ jobs:
         run: |
           make coverage
 
-      - name: Check coverage
-        run: |
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-          MIN_COVERAGE=80  # Set your desired minimum coverage percentage here
-
-          echo "Code coverage: $COVERAGE%"
-
-          MIN_COVERAGE="${{ github.event.inputs.min_coverage }}"
-
-          if [ "$COVERAGE" -lt "$MIN_COVERAGE" ]; then
-            echo "Coverage is below the required threshold of $MIN_COVERAGE%. Failing the build."
-            exit 1
-          else
-            echo "Coverage is above the minimum threshold of $MIN_COVERAGE%. Continuing."
-          fi
+      - name: check test coverage
+        uses: vladopajic/go-test-coverage@v2
+        with:
+          config: ./.testcoverage.yml
