@@ -41,7 +41,7 @@ func (r *HttpClient) Get(ctx context.Context, url string, dest any) error {
 		return fmt.Errorf("expected a pointer for 'dest', but got %s", reflect.TypeOf(dest))
 	}
 
-	req := r.httpClient.R()
+	req := r.httpClient.R().SetContext(ctx).SetHeaders(map[string]string{"Content-Type": "application/json", "Accept": "application/json"})
 	resp, err := req.SetResult(dest).Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to send GET request to %s: %w", url, err)

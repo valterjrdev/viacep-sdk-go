@@ -98,7 +98,7 @@ func TestViaCep_MemoryCache_Set(t *testing.T) {
 	})
 
 	t.Run("TTL expiry", func(t *testing.T) {
-		err := cache.Set(context.Background(), "user:2", model, 200*time.Millisecond)
+		err := cache.Set(context.Background(), "user:2", model, 10*time.Millisecond)
 		if err != nil {
 			t.Fatalf("Failed to set cache with TTL: %v", err)
 		}
@@ -108,7 +108,7 @@ func TestViaCep_MemoryCache_Set(t *testing.T) {
 		assert.True(t, found)
 		assert.Equal(t, model, dest)
 
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(40 * time.Millisecond)
 
 		var dest2 dummy
 		found = cache.Get(context.Background(), "user:2", &dest2)
