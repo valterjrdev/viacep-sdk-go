@@ -100,9 +100,7 @@ func TestViaCep_MemoryCache_Set(t *testing.T) {
 
 	t.Run("set and retrieve successfully", func(t *testing.T) {
 		err := cache.Set(context.Background(), "user:1", model, 0)
-		if err != nil {
-			t.Fatalf("Failed to set cache: %v", err)
-		}
+		assert.NoError(t, err)
 
 		var dest dummy
 		found := cache.Get(context.Background(), "user:1", &dest)
@@ -128,20 +126,18 @@ func TestViaCep_MemoryCache_Set(t *testing.T) {
 	})
 
 	t.Run("TTL expiry", func(t *testing.T) {
-		err := cache.Set(context.Background(), "user:2", model, 10*time.Millisecond)
-		if err != nil {
-			t.Fatalf("Failed to set cache with TTL: %v", err)
-		}
+		err := cache.Set(context.Background(), "user:1", model, 10*time.Millisecond)
+		assert.NoError(t, err)
 
 		var dest dummy
-		found := cache.Get(context.Background(), "user:2", &dest)
+		found := cache.Get(context.Background(), "user:1", &dest)
 		assert.True(t, found)
 		assert.Equal(t, model, dest)
 
 		time.Sleep(40 * time.Millisecond)
 
 		var dest2 dummy
-		found = cache.Get(context.Background(), "user:2", &dest2)
+		found = cache.Get(context.Background(), "user:1", &dest2)
 		assert.False(t, found)
 		assert.Equal(t, dummy{}, dest2)
 	})
@@ -159,15 +155,11 @@ func TestViaCep_MemoryCache_Delete(t *testing.T) {
 	model := dummy{ID: 1, Name: "John Doe", Age: 30}
 
 	err := cache.Set(context.Background(), "user:1", model, 0)
-	if err != nil {
-		t.Fatalf("Failed to set cache: %v", err)
-	}
+	assert.NoError(t, err)
 
 	t.Run("delete key", func(t *testing.T) {
 		err := cache.Delete(context.Background(), "user:1")
-		if err != nil {
-			t.Errorf("Expected no error when deleting existing key, but got: %v", err)
-		}
+		assert.NoError(t, err)
 
 		var dest dummy
 		found := cache.Get(context.Background(), "user:1", &dest)
@@ -182,11 +174,11 @@ func TestViaCep_RedisCache_Get(t *testing.T) {
 		Age  int
 	}
 
+	model := dummy{ID: 1, Name: "John Doe", Age: 30}
+
 	t.Run("retrieve value with success", func(t *testing.T) {
 		client, mock := redismock.NewClientMock()
 		cache := NewRedisCache(client)
-
-		model := dummy{ID: 1, Name: "John Doe", Age: 30}
 
 		var buffer bytes.Buffer
 		encoder := gob.NewEncoder(&buffer)
@@ -243,5 +235,169 @@ func TestViaCep_RedisCache_Get(t *testing.T) {
 		assert.Equal(t, dummy{ID: 0, Name: "", Age: 0}, dest)
 
 		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestViaCep_RedisCache_Set(t *testing.T) {
+	type dummy struct {
+		ID   int
+		Name string
+		Age  int
+	}
+
+	model := dummy{ID: 1, Name: "John Doe", Age: 30}
+
+	t.Run("set and retrieve successfully", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
+
+		var buffer bytes.Buffer
+		encoder := gob.NewEncoder(&buffer)
+		err := encoder.Encode(model)
+		assert.NoError(t, err)
+
+		mock.ExpectSet("user:1", buffer.Bytes(), 0).SetVal("OK")
+		mock.ExpectGet("user:1").SetVal(buffer.String())
+
+		err = cache.Set(context.Background(), "user:1", model, 0)
+		assert.NoError(t, err)
+
+		var dest dummy
+		found := cache.Get(context.Background(), "user:1", &dest)
+		assert.True(t, found)
+		assert.Equal(t, model, dest)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("error set key", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
+
+		var buffer bytes.Buffer
+		encoder := gob.NewEncoder(&buffer)
+		err := encoder.Encode(model)
+		assert.NoError(t, err)
+
+		mock.ExpectSet("user:1", buffer.Bytes(), 0).SetErr(errors.New("error"))
+
+		err = cache.Set(context.Background(), "user:1", model, 0)
+		assert.EqualError(t, err, "failed to set value in cache: error")
+
+		var dest dummy
+		found := cache.Get(context.Background(), "user:1", &dest)
+		assert.False(t, found)
+		assert.Equal(t, dummy{}, dest)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("serialization error", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
+
+		testCases := []struct {
+			value    any
+			expected string
+		}{
+			{make(chan int), "failed to encode value of type chan int: gob NewTypeObject can't handle type: chan int"},
+			{func() {}, "failed to encode value of type func(): gob NewTypeObject can't handle type: func()"},
+			{map[chan int]int{}, "failed to encode value of type map[chan int]int: gob NewTypeObject can't handle type: chan int"},
+			{struct{ x chan int }{make(chan int)}, "failed to encode value of type struct { x chan int }: gob: type struct { x chan int } has no exported fields"},
+		}
+
+		for _, tc := range testCases {
+			err := cache.Set(context.Background(), "invalid:", tc.value, 0)
+			assert.EqualError(t, err, tc.expected)
+		}
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("TTL expiry", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
+
+		var buffer bytes.Buffer
+		encoder := gob.NewEncoder(&buffer)
+		err := encoder.Encode(model)
+		assert.NoError(t, err)
+
+		TTL := 10 * time.Millisecond
+		mock.ExpectSet("user:1", buffer.Bytes(), TTL).SetVal("OK")
+		mock.ExpectGet("user:1").SetVal(buffer.String())
+
+		err = cache.Set(context.Background(), "user:1", model, TTL)
+		assert.NoError(t, err)
+
+		var dest dummy
+		found := cache.Get(context.Background(), "user:1", &dest)
+		assert.True(t, found)
+		assert.Equal(t, model, dest)
+
+		time.Sleep(40 * time.Millisecond)
+
+		var dest2 dummy
+		found = cache.Get(context.Background(), "user:1", &dest2)
+		assert.False(t, found)
+		assert.Equal(t, dummy{}, dest2)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestViaCep_RedisCache_Delete(t *testing.T) {
+	type dummy struct {
+		ID   int
+		Name string
+		Age  int
+	}
+
+	model := dummy{ID: 1, Name: "John Doe", Age: 30}
+
+	t.Run("delete key", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
+
+		var buffer bytes.Buffer
+		encoder := gob.NewEncoder(&buffer)
+		err := encoder.Encode(model)
+		assert.NoError(t, err)
+
+		mock.ExpectSet("user:1", buffer.Bytes(), 0).SetVal("OK")
+		mock.ExpectDel("user:1").SetVal(1)
+
+		err = cache.Set(context.Background(), "user:1", model, 0)
+		assert.NoError(t, err)
+
+		err = cache.Delete(context.Background(), "user:1")
+		assert.NoError(t, err)
+
+		var dest dummy
+		found := cache.Get(context.Background(), "user:1", &dest)
+		assert.False(t, found)
+	})
+
+	t.Run("error delete key", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
+
+		var buffer bytes.Buffer
+		encoder := gob.NewEncoder(&buffer)
+		err := encoder.Encode(model)
+		assert.NoError(t, err)
+
+		mock.ExpectSet("user:1", buffer.Bytes(), 0).SetVal("OK")
+		mock.ExpectDel("user:1").SetErr(errors.New("error"))
+
+		err = cache.Set(context.Background(), "user:1", model, 0)
+		assert.NoError(t, err)
+
+		err = cache.Delete(context.Background(), "user:1")
+		assert.EqualError(t, err, "failed to delete key from cache: error")
+
+		var dest dummy
+		found := cache.Get(context.Background(), "user:1", &dest)
+		assert.False(t, found)
 	})
 }

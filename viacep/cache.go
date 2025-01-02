@@ -169,10 +169,11 @@ func (r *RedisCache) Set(ctx context.Context, key string, value any, ttl time.Du
 		return fmt.Errorf("failed to encode value of type %T: %w", value, err)
 	}
 
-	err := r.client.Set(ctx, key, buffer, ttl).Err()
+	err := r.client.Set(ctx, key, buffer.Bytes(), ttl).Err()
 	if err != nil {
 		return fmt.Errorf("failed to set value in cache: %w", err)
 	}
+
 	return nil
 }
 
