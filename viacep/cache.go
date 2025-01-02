@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 const cacheTTL = 3600 * time.Second
@@ -77,9 +79,23 @@ type memoryCache struct {
 	data map[string][]byte
 }
 
+type RedisCache struct {
+	client *redis.Client
+}
+
+func cacheKey(value ...string) string {
+	return fmt.Sprintf("%s%x", cachePrefix, md5.Sum([]byte(strings.Join(value, ","))))
+}
+
 func newMemoryCache() *memoryCache {
 	return &memoryCache{
 		data: make(map[string][]byte),
+	}
+}
+
+func NewRedisCache(client *redis.Client) *RedisCache {
+	return &RedisCache{
+		client: client,
 	}
 }
 
@@ -131,6 +147,40 @@ func (c *memoryCache) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-func cacheKey(value ...string) string {
-	return fmt.Sprintf("%s%x", cachePrefix, md5.Sum([]byte(strings.Join(value, ","))))
+func (r *RedisCache) Get(ctx context.Context, key string, dest any) bool {
+	val, err := r.client.Get(ctx, key).Result()
+	if err != nil {
+		return false
+	}
+
+	buffer := bytes.NewBuffer([]byte(val))
+	decoder := gob.NewDecoder(buffer)
+	if err := decoder.Decode(dest); err != nil {
+		return false
+	}
+
+	return true
+}
+
+func (r *RedisCache) Set(ctx context.Context, key string, value any, ttl time.Duration) error {
+	var buffer bytes.Buffer
+	encoder := gob.NewEncoder(&buffer)
+	if err := encoder.Encode(value); err != nil {
+		return fmt.Errorf("failed to encode value of type %T: %w", value, err)
+	}
+
+	err := r.client.Set(ctx, key, buffer, ttl).Err()
+	if err != nil {
+		return fmt.Errorf("failed to set value in cache: %w", err)
+	}
+	return nil
+}
+
+func (r *RedisCache) Delete(ctx context.Context, key string) error {
+	err := r.client.Del(ctx, key).Err()
+	if err != nil {
+		return fmt.Errorf("failed to delete key from cache: %w", err)
+	}
+
+	return nil
 }

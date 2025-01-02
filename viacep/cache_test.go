@@ -1,14 +1,44 @@
 package viacep
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/gob"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/go-redis/redismock/v8"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestViaCep_MemoryCache_cacheKey(t *testing.T) {
+	t.Run("multiple values", func(t *testing.T) {
+		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("part1,part2,part3")))
+		expected := fmt.Sprintf("viacep:%s", expectedHash)
+
+		result := cacheKey("part1", "part2", "part3")
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("single value", func(t *testing.T) {
+		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("single")))
+		expected := fmt.Sprintf("viacep:%s", expectedHash)
+
+		result := cacheKey("single")
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("")))
+		expected := fmt.Sprintf("viacep:%s", expectedHash)
+
+		result := cacheKey()
+		assert.Equal(t, expected, result)
+	})
+}
 
 func TestViaCep_MemoryCache_Get(t *testing.T) {
 	cache := newMemoryCache()
@@ -43,7 +73,7 @@ func TestViaCep_MemoryCache_Get(t *testing.T) {
 		assert.Equal(t, dummy{}, dest)
 	})
 
-	t.Run("deserialization failure", func(t *testing.T) {
+	t.Run("deserialization error", func(t *testing.T) {
 		cache.mu.Lock()
 		cache.data["user:invalid"] = []byte("invalid data")
 		cache.mu.Unlock()
@@ -145,28 +175,91 @@ func TestViaCep_MemoryCache_Delete(t *testing.T) {
 	})
 }
 
-func TestViaCep_MemoryCache_cacheKey(t *testing.T) {
-	t.Run("multiple values", func(t *testing.T) {
-		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("part1,part2,part3")))
-		expected := fmt.Sprintf("viacep:%s", expectedHash)
+func TestViaCep_RedisCache_Get(t *testing.T) {
+	t.Run("retrieve value with success", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
 
-		result := cacheKey("part1", "part2", "part3")
-		assert.Equal(t, expected, result)
+		type dummy struct {
+			ID   int
+			Name string
+			Age  int
+		}
+
+		model := dummy{ID: 1, Name: "John Doe", Age: 30}
+
+		var buffer bytes.Buffer
+		encoder := gob.NewEncoder(&buffer)
+		err := encoder.Encode(model)
+		assert.NoError(t, err)
+
+		mock.ExpectGet("user:1").SetVal(buffer.String())
+
+		var dest dummy
+		found := cache.Get(context.Background(), "user:1", &dest)
+		assert.True(t, found)
+		assert.Equal(t, model, dest)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("single value", func(t *testing.T) {
-		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("single")))
-		expected := fmt.Sprintf("viacep:%s", expectedHash)
+	t.Run("key not found", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
 
-		result := cacheKey("single")
-		assert.Equal(t, expected, result)
+		type dummy struct {
+			ID   int
+			Name string
+			Age  int
+		}
+
+		mock.ExpectGet("user:1").RedisNil()
+
+		var dest dummy
+		found := cache.Get(context.Background(), "user:1", &dest)
+		assert.False(t, found)
+		assert.Equal(t, dummy{}, dest)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("empty input", func(t *testing.T) {
-		expectedHash := fmt.Sprintf("%x", md5.Sum([]byte("")))
-		expected := fmt.Sprintf("viacep:%s", expectedHash)
+	t.Run("error get value", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
 
-		result := cacheKey()
-		assert.Equal(t, expected, result)
+		type dummy struct {
+			ID   int
+			Name string
+			Age  int
+		}
+
+		mock.ExpectGet("user:1").SetErr(errors.New("error"))
+
+		var dest dummy
+		found := cache.Get(context.Background(), "user:1", &dest)
+		assert.False(t, found)
+		assert.Equal(t, dummy{}, dest)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("deserialization error", func(t *testing.T) {
+		client, mock := redismock.NewClientMock()
+		cache := NewRedisCache(client)
+
+		type dummy struct {
+			ID   int
+			Name string
+			Age  int
+		}
+
+		mock.ExpectGet("user:1").SetVal("invalid data")
+
+		var dest dummy
+		found := cache.Get(context.Background(), "user:1", &dest)
+		assert.False(t, found)
+		assert.Equal(t, dummy{ID: 0, Name: "", Age: 0}, dest)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
