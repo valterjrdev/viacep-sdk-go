@@ -176,15 +176,15 @@ func TestViaCep_MemoryCache_Delete(t *testing.T) {
 }
 
 func TestViaCep_RedisCache_Get(t *testing.T) {
+	type dummy struct {
+		ID   int
+		Name string
+		Age  int
+	}
+
 	t.Run("retrieve value with success", func(t *testing.T) {
 		client, mock := redismock.NewClientMock()
 		cache := NewRedisCache(client)
-
-		type dummy struct {
-			ID   int
-			Name string
-			Age  int
-		}
 
 		model := dummy{ID: 1, Name: "John Doe", Age: 30}
 
@@ -207,12 +207,6 @@ func TestViaCep_RedisCache_Get(t *testing.T) {
 		client, mock := redismock.NewClientMock()
 		cache := NewRedisCache(client)
 
-		type dummy struct {
-			ID   int
-			Name string
-			Age  int
-		}
-
 		mock.ExpectGet("user:1").RedisNil()
 
 		var dest dummy
@@ -227,12 +221,6 @@ func TestViaCep_RedisCache_Get(t *testing.T) {
 		client, mock := redismock.NewClientMock()
 		cache := NewRedisCache(client)
 
-		type dummy struct {
-			ID   int
-			Name string
-			Age  int
-		}
-
 		mock.ExpectGet("user:1").SetErr(errors.New("error"))
 
 		var dest dummy
@@ -246,12 +234,6 @@ func TestViaCep_RedisCache_Get(t *testing.T) {
 	t.Run("deserialization error", func(t *testing.T) {
 		client, mock := redismock.NewClientMock()
 		cache := NewRedisCache(client)
-
-		type dummy struct {
-			ID   int
-			Name string
-			Age  int
-		}
 
 		mock.ExpectGet("user:1").SetVal("invalid data")
 
